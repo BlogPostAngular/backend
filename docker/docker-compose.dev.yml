@@ -1,0 +1,36 @@
+services:
+  api:
+    build: 
+      context: ..
+      target: development
+    
+    restart: always
+
+    env_file:
+      - ../.env
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      TZ: Asia/Phnom_Penh
+
+    volumes:
+      - ..:/app                # Mount project ROOT not docker/ folder
+      - /app/node_modules
+
+    # Run the local nodemon binary from package.json
+    command: npm run dev -- --legacy-watch
+
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: nginx_proxy
+    environment:
+      TZ: Asia/Phnom_Penh
+    ports:
+      - "80:80"
+    volumes:
+      - ../nginx/nginx.dev.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
+
+

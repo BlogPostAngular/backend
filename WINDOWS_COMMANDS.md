@@ -12,7 +12,7 @@ $body = @{
     email = "test@example.com"
 } | ConvertTo-Json
 
-Invoke-RestMethod -Uri "http://localhost:4200/v1/users/register" -Method Post -Body $body -ContentType "application/json"
+Invoke-RestMethod -Uri "http://localhost:3000/v1/users/register" -Method Post -Body $body -ContentType "application/json"
 ```
 
 ### Login User
@@ -23,7 +23,7 @@ $body = @{
     password = "test123"
 } | ConvertTo-Json
 
-Invoke-RestMethod -Uri "http://localhost:4200/v1/auth/login" -Method Post -Body $body -ContentType "application/json"
+Invoke-RestMethod -Uri "http://localhost:3000/v1/auth/login" -Method Post -Body $body -ContentType "application/json"
 ```
 
 ### Get User Profile (with token)
@@ -34,7 +34,7 @@ $headers = @{
     Authorization = "Bearer $token"
 }
 
-Invoke-RestMethod -Uri "http://localhost:4200/v1/users/me" -Method Get -Headers $headers
+Invoke-RestMethod -Uri "http://localhost:3000/v1/users/me" -Method Get -Headers $headers
 ```
 
 ## Using curl on Windows (Single Line)
@@ -42,13 +42,13 @@ Invoke-RestMethod -Uri "http://localhost:4200/v1/users/me" -Method Get -Headers 
 ### Register User
 
 ```cmd
-curl -X POST "http://localhost:4200/v1/users/register" -H "Content-Type: application/json" -d "{\"username\":\"testuser\",\"password\":\"test123\",\"name\":\"Test User\"}"
+curl -X POST "http://localhost:3000/v1/users/register" -H "Content-Type: application/json" -d "{\"username\":\"testuser\",\"password\":\"test123\",\"name\":\"Test User\"}"
 ```
 
 ### Login User
 
 ```cmd
-curl -X POST "http://localhost:4200/v1/auth/login" -H "Content-Type: application/json" -d "{\"username\":\"testuser\",\"password\":\"test123\"}"
+curl -X POST "http://localhost:3000/v1/auth/login" -H "Content-Type: application/json" -d "{\"username\":\"testuser\",\"password\":\"test123\"}"
 ```
 
 ## Using the Test Script

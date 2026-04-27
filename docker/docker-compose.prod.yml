@@ -1,0 +1,26 @@
+services:
+  api:
+    build: 
+      context: ..
+      target: production
+    restart: always
+    env_file:
+      - ../.env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      TZ: Asia/Phnom_Penh
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: nginx_proxy_prod
+    restart: always
+    environment:
+      TZ: Asia/Phnom_Penh
+    ports:
+      - "80:80"
+      # - "443:443"
+    volumes:
+      - ../nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro   
+    depends_on:
+      - api
