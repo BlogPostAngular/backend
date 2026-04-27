@@ -3,6 +3,7 @@ services:
     build: 
       context: ..
       target: production
+    container_name: blog_api_prod
     restart: always
     env_file:
       - ../.env
@@ -10,14 +11,6 @@ services:
       NODE_ENV: production
       PORT: 3000
       TZ: Asia/Phnom_Penh
-      MONGODB_URI: ${MONGODB_URI}
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
-      JWT_EXPIRE: ${JWT_EXPIRE}
-      JWT_REFRESH_EXPIRE: ${JWT_REFRESH_EXPIRE}
-      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
-      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
-      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
 
   nginx:
     image: nginx:1.27-alpine
