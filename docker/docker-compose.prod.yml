@@ -20,8 +20,17 @@ services:
       TZ: Asia/Phnom_Penh
     ports:
       - "80:80"
-      # - "443:443"
+      - "443:443"
     volumes:
-      - ../nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro   
+      - ../nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ../nginx/certbot/conf:/etc/letsencrypt:ro
+      - ../nginx/certbot/www:/var/www/certbot:ro   
     depends_on:
       - api
+
+  certbot:                                        # ADD THIS
+    image: certbot/certbot
+    container_name: certbot
+    volumes:
+      - ../nginx/certbot/conf:/etc/letsencrypt    # no :ro — certbot needs to WRITE here
+      - ../nginx/certbot/www:/var/www/certbot
