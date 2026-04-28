@@ -48,7 +48,7 @@ app.use("/v1/upload", uploadRoutes);
 app.get("/health", (req, res) => {
   res.status(200).json({
     success: true,
-    message: "Server is running",
+    message: "Server is running and ci cd is working",
     timestamp: new Date().toISOString(),
   });
 });
