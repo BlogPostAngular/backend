@@ -1,0 +1,62 @@
+name: CI/CD to GCP Compute Engine
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create deployment archive
+        run: |
+          # Create a tar archive of the current directory, excluding unnecessary files
+          tar -cvf deploy.tar \
+            --exclude='node_modules' \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='deploy.tar' \
+            .
+
+      - name: Copy archive to GCP Compute Engine
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.GCP_HOST }}
+          username: ${{ secrets.GCP_USERNAME }}
+          key: ${{ secrets.GCP_SSH_KEY }}
+          source: "deploy.tar"
+          target: "~/app-blog/server"
+
+      - name: Execute deployment commands via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.GCP_HOST }}
+          username: ${{ secrets.GCP_USERNAME }}
+          key: ${{ secrets.GCP_SSH_KEY }}
+          script: |
+            # Navigate to the app directory (create if it doesn't exist)
+            mkdir -p ~/app-blog/server
+            cd ~/app-blog/server
+            
+            # Extract the archive and remove it
+            tar -xvf deploy.tar
+            rm deploy.tar
+            
+            # Optional: Create the .env file from a GitHub secret
+            # If you want to use this, create a secret named PROD_ENV_FILE in GitHub
+            # echo "${{ secrets.PROD_ENV_FILE }}" > .env
+            
+            # Start the deployment via docker-compose
+            cd docker
+            
+            # Bring down the old containers and start the new ones
+            docker-compose -f docker-compose.prod.yml down
+            docker-compose -f docker-compose.prod.yml up -d --build
+            
+            # Clean up old unused docker images to free up disk space
+            docker image prune -af
