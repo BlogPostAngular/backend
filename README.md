@@ -123,20 +123,68 @@ The server will run on `http://localhost:3000`
 - ✅ CORS enabled
 - ✅ Input validation
 
-## Next Steps
+---
 
-You mentioned you'll handle CRUD operations later. When ready, you can add routes for:
+## 🚀 Deployment & CI/CD Guide
 
-- Blog posts (create, read, update, delete)
-- Comments
-- Categories
-- Articles
+This project is deployed to a Google Cloud Compute Engine instance using Docker and GitHub Actions.
 
-The authentication middleware is already set up in `middleware/auth.js` - just add `auth` middleware to any protected routes.
-echo "# backend" >> README.md
-git init
-git add .
-git commit -m "first commit"
-git branch -M main
-git remote add origin https://github.com/BlogPostAngular/backend.git
-git push -u origin main
+### CI/CD Flow (GitHub Actions)
+
+1. **Trigger:** Any code pushed to the `main` branch automatically triggers `.github/workflows/ci-cd.yml`.
+2. **Package:** GitHub Actions creates a compressed `.tar` archive of the codebase (excluding `node_modules` and `.git`).
+3. **Transfer:** It securely copies the archive to the server at `~/app-blog/server` using SCP.
+4. **Deploy:** It logs into the server via SSH, extracts the code, and runs `docker compose -f docker-compose.prod.yml up -d --build`.
+5. **Clean up:** Old Docker images are pruned to save disk space.
+
+*To view deployment logs, check the **"Actions"** tab in your GitHub repository.*
+
+### 💻 Server Access Guide
+
+You can access the server terminal using one of two methods:
+
+**Method 1: Google Cloud Console (Easiest)**
+1. Open the Google Cloud Console.
+2. Go to **Compute Engine > VM instances**.
+3. Click the **SSH** button next to your instance.
+
+**Method 2: Local Terminal**
+If your SSH keys are set up locally:
+```bash
+ssh saapril1177@<YOUR_SERVER_IP>
+```
+
+### 🛠️ Useful Server Commands
+
+Once logged into your server terminal, use these commands to manage the application:
+
+**1. Navigate to the App Directory:**
+```bash
+cd ~/app-blog/server/docker
+```
+
+**2. View Running Containers:**
+```bash
+docker compose -f docker-compose.prod.yml ps
+```
+
+**3. View Live Logs:**
+```bash
+# View all logs
+docker compose -f docker-compose.prod.yml logs -f
+
+# View only the API logs
+docker compose -f docker-compose.prod.yml logs -f api
+```
+*(Press `Ctrl + C` to exit logs)*
+
+**4. Restart the Application:**
+```bash
+docker compose -f docker-compose.prod.yml restart
+```
+
+**5. Manually Deploy (Without GitHub):**
+```bash
+docker compose -f docker-compose.prod.yml down
+docker compose -f docker-compose.prod.yml up -d --build
+```
