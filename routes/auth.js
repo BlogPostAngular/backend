@@ -17,9 +17,33 @@ try {
   console.warn("⚠️  google-auth-library not installed — /v1/auth/google disabled");
 }
 
-// @route   POST /v1/auth/login
-// @desc    Login user (username OR email)
-// @access  Public
+/**
+ * @swagger
+ * /auth/login:
+ *   post:
+ *     summary: Login user
+ *     description: Authenticate with username/email and password. Returns access & refresh tokens.
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/LoginRequest'
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       400:
+ *         description: Missing fields or Google-only account
+ *       401:
+ *         description: Invalid credentials
+ *       500:
+ *         description: Server error
+ */
 router.post("/login", async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -68,9 +92,33 @@ router.post("/login", async (req, res) => {
   }
 });
 
-// @route   POST /v1/auth/google
-// @desc    Google Sign-In / Sign-Up (verifies Google ID token)
-// @access  Public
+/**
+ * @swagger
+ * /auth/google:
+ *   post:
+ *     summary: Google Sign-In / Sign-Up
+ *     description: Authenticate or create a new account using a Google ID token.
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/GoogleAuthRequest'
+ *     responses:
+ *       200:
+ *         description: Google auth successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       400:
+ *         description: Missing token or email
+ *       401:
+ *         description: Invalid Google token
+ *       503:
+ *         description: Google auth not configured on server
+ */
 router.post("/google", async (req, res) => {
   if (!OAuth2Client) {
     return res.status(503).json({
@@ -142,9 +190,33 @@ router.post("/google", async (req, res) => {
   }
 });
 
-// @route   POST /v1/auth/refresh-token
-// @desc    Refresh access token
-// @access  Public
+/**
+ * @swagger
+ * /auth/refresh-token:
+ *   post:
+ *     summary: Refresh access token
+ *     description: Exchange a valid refresh token for a new access token and refresh token pair.
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RefreshTokenRequest'
+ *     responses:
+ *       200:
+ *         description: Tokens refreshed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/TokenRefreshResponse'
+ *       400:
+ *         description: Missing refresh token
+ *       401:
+ *         description: Refresh token expired
+ *       402:
+ *         description: Invalid refresh token
+ */
 router.post("/refresh-token", async (req, res) => {
   try {
     const { refresh_token } = req.body;
@@ -171,9 +243,21 @@ router.post("/refresh-token", async (req, res) => {
   }
 });
 
-// @route   POST /v1/auth/logout
-// @desc    Logout user
-// @access  Private
+/**
+ * @swagger
+ * /auth/logout:
+ *   post:
+ *     summary: Logout user
+ *     description: Invalidate the current session (client should discard tokens).
+ *     tags: [Auth]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Logged out successfully
+ *       401:
+ *         description: Unauthorized
+ */
 router.post("/logout", auth, async (req, res) => {
   try {
     res.status(200).json({ success: true, message: "Logged out successfully" });

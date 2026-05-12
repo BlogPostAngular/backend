@@ -47,9 +47,8 @@ jobs:
             tar -xvf deploy.tar
             rm deploy.tar
             
-            # Optional: Create the .env file from a GitHub secret
-            # If you want to use this, create a secret named PROD_ENV_FILE in GitHub
-            # echo "${{ secrets.PROD_ENV_FILE }}" > .env
+            # Inject production .env from GitHub Secrets (go to GitHub repo → Settings → Secrets)
+            echo "${{ secrets.PROD_ENV_FILE }}" > .env
             
             # Start the deployment via docker-compose
             cd docker

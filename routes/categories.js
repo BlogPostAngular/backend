@@ -17,6 +17,28 @@ const SEED_CATEGORIES = [
 // @route   GET /v1/categories
 // @desc    Get all categories
 // @access  Public
+/**
+ * @swagger
+ * /categories:
+ *   get:
+ *     summary: Get all categories
+ *     description: Retrieve all non-deleted categories sorted by ordering.
+ *     tags: [Categories]
+ *     responses:
+ *       200:
+ *         description: Category list
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Category'
+ */
 router.get("/", async (req, res) => {
   try {
     const categories = await Category.find({ _deleted: false }).sort({
@@ -32,6 +54,33 @@ router.get("/", async (req, res) => {
 // @route   GET /v1/categories/:id
 // @desc    Get single category
 // @access  Public
+/**
+ * @swagger
+ * /categories/{id}:
+ *   get:
+ *     summary: Get a single category
+ *     tags: [Categories]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Category detail
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   $ref: '#/components/schemas/Category'
+ *       404:
+ *         description: Category not found
+ */
 router.get("/:id", async (req, res) => {
   try {
     const category = await Category.findById(req.params.id);
@@ -50,6 +99,28 @@ router.get("/:id", async (req, res) => {
 // @route   POST /v1/categories
 // @desc    Create a category
 // @access  Private
+/**
+ * @swagger
+ * /categories:
+ *   post:
+ *     summary: Create a category
+ *     tags: [Categories]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateCategoryRequest'
+ *     responses:
+ *       201:
+ *         description: Category created
+ *       400:
+ *         description: Missing required fields
+ *       409:
+ *         description: Category already exists
+ */
 router.post("/", auth, async (req, res) => {
   try {
     const { name_en, name_kh, ordering, status } = req.body;
@@ -76,6 +147,32 @@ router.post("/", auth, async (req, res) => {
 // @route   PUT /v1/categories/:id
 // @desc    Update a category
 // @access  Private
+/**
+ * @swagger
+ * /categories/{id}:
+ *   put:
+ *     summary: Update a category
+ *     tags: [Categories]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UpdateCategoryRequest'
+ *     responses:
+ *       200:
+ *         description: Category updated
+ *       404:
+ *         description: Category not found
+ */
 router.put("/:id", auth, async (req, res) => {
   try {
     const { name_en, name_kh, ordering, status, _active } = req.body;
@@ -99,6 +196,27 @@ router.put("/:id", auth, async (req, res) => {
 // @route   DELETE /v1/categories/:id
 // @desc    Soft-delete a category
 // @access  Private
+/**
+ * @swagger
+ * /categories/{id}:
+ *   delete:
+ *     summary: Soft-delete a category
+ *     description: Sets _deleted=true and _active=false. Does not remove from database.
+ *     tags: [Categories]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Category deleted
+ *       404:
+ *         description: Category not found
+ */
 router.delete("/:id", auth, async (req, res) => {
   try {
     const category = await Category.findByIdAndUpdate(
@@ -121,7 +239,22 @@ router.delete("/:id", auth, async (req, res) => {
 // @route   POST /v1/categories/seed
 // @desc    Seed initial categories from mock data (run once)
 // @access  Public (protect in production)
-router.post("/seed", async (req, res) => {
+/**
+ * @swagger
+ * /categories/seed:
+ *   post:
+ *     summary: Seed initial categories
+ *     description: Insert sample categories. Skips if categories already exist.
+ *     tags: [Categories]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       201:
+ *         description: Categories seeded
+ *       200:
+ *         description: Categories already exist
+ */
+router.post("/seed", auth, async (req, res) => {
   try {
     const existing = await Category.countDocuments();
     if (existing > 0) {

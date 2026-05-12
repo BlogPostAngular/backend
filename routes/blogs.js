@@ -125,6 +125,57 @@ const BLOG_POPULATE = [
 // @route   GET /v1/blogs
 // @desc    Get all blogs (pagination + filters)
 // @access  Public
+/**
+ * @swagger
+ * /blogs:
+ *   get:
+ *     summary: Get all blogs
+ *     description: Retrieve a paginated list of blogs with optional filters.
+ *     tags: [Blogs]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *       - in: query
+ *         name: published
+ *         schema:
+ *           type: boolean
+ *       - in: query
+ *         name: author
+ *         schema:
+ *           type: string
+ *         description: Author ObjectId
+ *       - in: query
+ *         name: tag
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: category
+ *         schema:
+ *           type: string
+ *         description: Category ObjectId
+ *       - in: query
+ *         name: trending
+ *         schema:
+ *           type: boolean
+ *         description: Sort by total reads if true
+ *     responses:
+ *       200:
+ *         description: Blog list
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/BlogListResponse'
+ *       500:
+ *         description: Server error
+ */
 router.get("/", async (req, res) => {
   try {
     const { page = 1, limit = 10, published, author, tag, category, trending } = req.query;
@@ -167,6 +218,40 @@ router.get("/", async (req, res) => {
 // @route   GET /v1/blogs/mine
 // @desc    Get all blogs authored by the current user
 // @access  Private
+/**
+ * @swagger
+ * /blogs/mine:
+ *   get:
+ *     summary: Get my blogs
+ *     description: Retrieve all blogs authored by the authenticated user.
+ *     tags: [Blogs]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *       - in: query
+ *         name: published
+ *         schema:
+ *           type: boolean
+ *     responses:
+ *       200:
+ *         description: User's blog list
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/BlogListResponse'
+ *       401:
+ *         description: Unauthorized
+ */
 router.get("/mine", auth, async (req, res) => {
   try {
     const { page = 1, limit = 20, published } = req.query;
@@ -201,7 +286,35 @@ router.get("/mine", auth, async (req, res) => {
 // @route   GET /v1/blogs/:id
 // @desc    Get single blog by ID or blog_id slug
 // @access  Public
-
+/**
+ * @swagger
+ * /blogs/{id}:
+ *   get:
+ *     summary: Get a single blog
+ *     description: Retrieve a blog by its MongoDB ObjectId or slug. Increments the read counter.
+ *     tags: [Blogs]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: MongoDB ObjectId or blog_id slug
+ *     responses:
+ *       200:
+ *         description: Blog detail
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   $ref: '#/components/schemas/Blog'
+ *       404:
+ *         description: Blog not found
+ */
 router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -218,11 +331,13 @@ router.get("/:id", async (req, res) => {
       return res.status(404).json({ success: false, message: "Blog not found" });
     }
 
-    // Increment read count
+    // Increment read count atomically (prevents race conditions)
+    await Blog.updateOne(
+      { _id: blog._id },
+      { $inc: { views: 1, "activity.total_reads": 1 } }
+    );
     blog.views = (blog.views || 0) + 1;
-    blog.activity = blog.activity || {};
     blog.activity.total_reads = (blog.activity.total_reads || 0) + 1;
-    await blog.save();
 
     res.status(200).json({ success: true, data: blog });
   } catch (error) {
@@ -234,6 +349,38 @@ router.get("/:id", async (req, res) => {
 // @route   POST /v1/blogs
 // @desc    Create new blog
 // @access  Private
+/**
+ * @swagger
+ * /blogs:
+ *   post:
+ *     summary: Create a new blog
+ *     description: Create a new blog post. The authenticated user becomes the author.
+ *     tags: [Blogs]
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateBlogRequest'
+ *     responses:
+ *       201:
+ *         description: Blog created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   $ref: '#/components/schemas/Blog'
+ *       400:
+ *         description: Missing required fields
+ *       401:
+ *         description: Unauthorized
+ */
 router.post("/", auth, async (req, res) => {
   try {
     const { title, content, des, tags, published, category, banner, thumbnail } = req.body;
@@ -274,6 +421,36 @@ router.post("/", auth, async (req, res) => {
 // @route   PUT /v1/blogs/:id
 // @desc    Update blog
 // @access  Private (author only)
+/**
+ * @swagger
+ * /blogs/{id}:
+ *   put:
+ *     summary: Update a blog
+ *     description: Update a blog post. Only the original author can update.
+ *     tags: [Blogs]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Blog ObjectId
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UpdateBlogRequest'
+ *     responses:
+ *       200:
+ *         description: Blog updated
+ *       403:
+ *         description: Not authorized
+ *       404:
+ *         description: Blog not found
+ */
 router.put("/:id", auth, async (req, res) => {
   try {
     const blog = await Blog.findById(req.params.id);
@@ -307,6 +484,30 @@ router.put("/:id", auth, async (req, res) => {
 // @route   DELETE /v1/blogs/:id
 // @desc    Delete blog
 // @access  Private (author only)
+/**
+ * @swagger
+ * /blogs/{id}:
+ *   delete:
+ *     summary: Delete a blog
+ *     description: Permanently delete a blog post. Only the original author can delete.
+ *     tags: [Blogs]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Blog ObjectId
+ *     responses:
+ *       200:
+ *         description: Blog deleted
+ *       403:
+ *         description: Not authorized
+ *       404:
+ *         description: Blog not found
+ */
 router.delete("/:id", auth, async (req, res) => {
   try {
     const blog = await Blog.findById(req.params.id);
@@ -334,7 +535,27 @@ router.delete("/:id", auth, async (req, res) => {
 // @route   POST /v1/blogs/seed
 // @desc    Seed mock blog articles into DB (requires categories to be seeded first)
 // @access  Public (run once)
-router.post("/seed", async (req, res) => {
+/**
+ * @swagger
+ * /blogs/seed:
+ *   post:
+ *     summary: Seed mock blog articles
+ *     description: |
+ *       Insert sample blog articles into the database.
+ *       Requires at least one user and seeded categories.
+ *       Skips if blogs already exist.
+ *     tags: [Blogs]
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       201:
+ *         description: Blogs seeded
+ *       200:
+ *         description: Blogs already exist
+ *       400:
+ *         description: No users found
+ */
+router.post("/seed", auth, async (req, res) => {
   try {
     const existing = await Blog.countDocuments();
     if (existing > 0) {
