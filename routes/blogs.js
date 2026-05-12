@@ -517,6 +517,8 @@ router.delete("/:id", auth, async (req, res) => {
       return res.status(403).json({ success: false, message: "Not authorized to delete this blog" });
     }
 
+
+    
     await blog.deleteOne();
 
     const User = require("../models/User");
