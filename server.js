@@ -25,6 +25,8 @@ const notificationsRoutes = require("./src/modules/notifications/notification.ro
 
 const app = express();
 
+app.set("trust proxy", 1);
+
 // HTTP Request Logger Middleware
 app.use(morgan("dev")); // Logs requests to the console (e.g., GET /health 200 15ms)
 
