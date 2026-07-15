@@ -1,3 +1,6 @@
+const dns = require("dns");
+dns.setServers(["8.8.8.8", "1.1.1.1"]);
+
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
@@ -9,14 +12,16 @@ require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 // Swagger
 const swaggerUi = require("swagger-ui-express");
-const swaggerSpec = require("./config/swagger");
+const swaggerSpec = require("./src/config/swagger");
 
 // Import routes
-const authRoutes = require("./routes/auth");
-const usersRoutes = require("./routes/users");
-const blogsRoutes = require("./routes/blogs");
-const categoriesRoutes = require("./routes/categories");
-const uploadRoutes = require("./routes/upload");
+const authRoutes = require("./src/modules/auth/auth.routes");
+const usersRoutes = require("./src/modules/users/user.routes");
+const blogsRoutes = require("./src/modules/blogs/blog.routes");
+const categoriesRoutes = require("./src/modules/categories/category.routes");
+const uploadRoutes = require("./src/modules/upload/upload.routes");
+const commentsRoutes = require("./src/modules/comments/comment.routes");
+const notificationsRoutes = require("./src/modules/notifications/notification.routes");
 
 const app = express();
 
@@ -26,7 +31,11 @@ app.use(morgan("dev")); // Logs requests to the console (e.g., GET /health 200 1
 // ── Security Middleware ──
 
 // Helmet — sets 11 security HTTP headers (XSS, clickjacking, MIME sniffing, etc.)
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+  })
+);
 
 // CORS — only allow your own frontend origins (set ALLOWED_ORIGINS in .env)
 const allowedOrigins = process.env.ALLOWED_ORIGINS
@@ -37,9 +46,16 @@ app.use(
   cors({
     origin: (origin, callback) => {
       // Allow requests with no origin (curl, Postman, mobile apps, server-to-server)
-      if (!origin || allowedOrigins.includes(origin)) {
+      // and allow localhost for development
+      if (
+        !origin ||
+        allowedOrigins.includes(origin) ||
+        origin.startsWith("http://localhost:") ||
+        origin.startsWith("http://127.0.0.1:")
+      ) {
         callback(null, true);
       } else {
+        console.error("CORS Error: Origin not allowed -", origin);
         callback(new Error("Not allowed by CORS"));
       }
     },
@@ -102,6 +118,8 @@ app.use("/v1/users", usersRoutes);
 app.use("/v1/blogs", blogsRoutes);
 app.use("/v1/categories", categoriesRoutes);
 app.use("/v1/upload", uploadRoutes);
+app.use("/v1/comments", commentsRoutes);
+app.use("/v1/notifications", notificationsRoutes);
 
 // Health check route
 app.get("/health", (req, res) => {

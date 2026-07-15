@@ -93,7 +93,6 @@ blogSchema.pre("save", function () {
   }
 });
 
-// ── Indexes ──────────────────────────────────────────────────────────────────
 // Compound index for the most common list query: published blogs sorted by date
 blogSchema.index({ published: 1, createdAt: -1 });
 

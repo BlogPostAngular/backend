@@ -1,8 +1,10 @@
-const express = require("express");
-const router = express.Router();
-const Blog = require("../models/Blog");
-const Category = require("../models/Category");
-const auth = require("../middleware/auth");
+const Blog = require("./blog.model");
+const Category = require("../categories/category.model");
+const User = require("../users/user.model");
+
+// Track likes: { blogId: Set<userId> } — persisted in a simple likes field on Blog
+// For production, use a separate Like model. Here we use Blog.likes Set pattern via an array.
+const Notification = require("../notifications/notification.model");
 
 // Seed data from frontend MOCK_ARTICLES
 const SEED_BLOGS = [
@@ -122,85 +124,40 @@ const BLOG_POPULATE = [
   { path: "category", select: "name_en name_kh status ordering _active" },
 ];
 
-// @route   GET /v1/blogs
-// @desc    Get all blogs (pagination + filters)
-// @access  Public
-/**
- * @swagger
- * /blogs:
- *   get:
- *     summary: Get all blogs
- *     description: Retrieve a paginated list of blogs with optional filters.
- *     tags: [Blogs]
- *     parameters:
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *           default: 1
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 10
- *       - in: query
- *         name: published
- *         schema:
- *           type: boolean
- *       - in: query
- *         name: author
- *         schema:
- *           type: string
- *         description: Author ObjectId
- *       - in: query
- *         name: tag
- *         schema:
- *           type: string
- *       - in: query
- *         name: category
- *         schema:
- *           type: string
- *         description: Category ObjectId
- *       - in: query
- *         name: trending
- *         schema:
- *           type: boolean
- *         description: Sort by total reads if true
- *     responses:
- *       200:
- *         description: Blog list
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/BlogListResponse'
- *       500:
- *         description: Server error
- */
-router.get("/", async (req, res) => {
+// Get all blogs (pagination + filters)
+const getBlogs = async (req, res) => {
   try {
-    const { page = 1, limit = 10, published, author, tag, category, trending } = req.query;
-    const query = {};
+    const { page = 1, limit = 10, published, author, tag, category, trending, query } = req.query;
+    const queryObj = {};
 
-    if (published !== undefined) query.published = published === "true";
-    if (author) query.author = author;
-    if (tag) query.tags = tag;
-    if (category) query.category = category;
+    if (published !== undefined) queryObj.published = published === "true";
+    if (author) queryObj.author = author;
+    if (tag) queryObj.tags = tag;
+    if (category) queryObj.category = category;
+
+    // Full-text search on title and description
+    if (query) {
+      queryObj.$or = [
+        { title: { $regex: query, $options: "i" } },
+        { des: { $regex: query, $options: "i" } },
+        { tags: { $regex: query, $options: "i" } },
+      ];
+    }
 
     let sort = { createdAt: -1 };
     if (trending === "true") {
       sort = { "activity.total_reads": -1 };
     }
 
-    // Run find + count in parallel instead of sequentially
     const [blogs, count] = await Promise.all([
-      Blog.find(query)
+      Blog.find(queryObj)
         .populate(BLOG_POPULATE)
         .sort(sort)
         .limit(Number(limit))
         .skip((Number(page) - 1) * Number(limit))
-        .lean()  // plain JS objects — skips Mongoose hydration, much faster on lists
+        .lean()
         .exec(),
-      Blog.countDocuments(query),
+      Blog.countDocuments(queryObj),
     ]);
 
     res.status(200).json({
@@ -216,46 +173,10 @@ router.get("/", async (req, res) => {
     console.error("Get blogs error:", error);
     res.status(500).json({ success: false, message: "Server error while fetching blogs" });
   }
-});
+};
 
-// @route   GET /v1/blogs/mine
-// @desc    Get all blogs authored by the current user
-// @access  Private
-/**
- * @swagger
- * /blogs/mine:
- *   get:
- *     summary: Get my blogs
- *     description: Retrieve all blogs authored by the authenticated user.
- *     tags: [Blogs]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *           default: 1
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 20
- *       - in: query
- *         name: published
- *         schema:
- *           type: boolean
- *     responses:
- *       200:
- *         description: User's blog list
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/BlogListResponse'
- *       401:
- *         description: Unauthorized
- */
-router.get("/mine", auth, async (req, res) => {
+// Get all blogs authored by current user
+const getMyBlogs = async (req, res) => {
   try {
     const { page = 1, limit = 20, published } = req.query;
     const query = { author: req.userId };
@@ -286,46 +207,14 @@ router.get("/mine", auth, async (req, res) => {
     console.error("Get my blogs error:", error);
     res.status(500).json({ success: false, message: "Server error while fetching your blogs" });
   }
-});
+};
 
-// @route   GET /v1/blogs/:id
-// @desc    Get single blog by ID or blog_id slug
-// @access  Public
-/**
- * @swagger
- * /blogs/{id}:
- *   get:
- *     summary: Get a single blog
- *     description: Retrieve a blog by its MongoDB ObjectId or slug. Increments the read counter.
- *     tags: [Blogs]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: MongoDB ObjectId or blog_id slug
- *     responses:
- *       200:
- *         description: Blog detail
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   $ref: '#/components/schemas/Blog'
- *       404:
- *         description: Blog not found
- */
-router.get("/:id", async (req, res) => {
+// Get single blog by ID or slug
+const getBlogById = async (req, res) => {
   try {
     const { id } = req.params;
     let blog;
 
-    // Try ObjectId first, then blog_id slug
     if (id.match(/^[0-9a-fA-F]{24}$/)) {
       blog = await Blog.findById(id).populate(BLOG_POPULATE);
     } else {
@@ -336,7 +225,6 @@ router.get("/:id", async (req, res) => {
       return res.status(404).json({ success: false, message: "Blog not found" });
     }
 
-    // Increment read count atomically (prevents race conditions)
     await Blog.updateOne(
       { _id: blog._id },
       { $inc: { views: 1, "activity.total_reads": 1 } }
@@ -349,44 +237,10 @@ router.get("/:id", async (req, res) => {
     console.error("Get blog error:", error);
     res.status(500).json({ success: false, message: "Server error while fetching blog" });
   }
-});
+};
 
-// @route   POST /v1/blogs
-// @desc    Create new blog
-// @access  Private
-/**
- * @swagger
- * /blogs:
- *   post:
- *     summary: Create a new blog
- *     description: Create a new blog post. The authenticated user becomes the author.
- *     tags: [Blogs]
- *     security:
- *       - BearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/CreateBlogRequest'
- *     responses:
- *       201:
- *         description: Blog created
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 data:
- *                   $ref: '#/components/schemas/Blog'
- *       400:
- *         description: Missing required fields
- *       401:
- *         description: Unauthorized
- */
-router.post("/", auth, async (req, res) => {
+// Create a blog
+const createBlog = async (req, res) => {
   try {
     const { title, content, des, tags, published, category, banner, thumbnail } = req.body;
 
@@ -408,7 +262,6 @@ router.post("/", auth, async (req, res) => {
 
     await blog.save();
 
-    const User = require("../models/User");
     await User.findByIdAndUpdate(req.userId, {
       $push: { blogs: blog._id },
       $inc: { "account_info.total_posts": 1 },
@@ -421,42 +274,10 @@ router.post("/", auth, async (req, res) => {
     console.error("Create blog error:", error);
     res.status(500).json({ success: false, message: "Server error while creating blog" });
   }
-});
+};
 
-// @route   PUT /v1/blogs/:id
-// @desc    Update blog
-// @access  Private (author only)
-/**
- * @swagger
- * /blogs/{id}:
- *   put:
- *     summary: Update a blog
- *     description: Update a blog post. Only the original author can update.
- *     tags: [Blogs]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Blog ObjectId
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/UpdateBlogRequest'
- *     responses:
- *       200:
- *         description: Blog updated
- *       403:
- *         description: Not authorized
- *       404:
- *         description: Blog not found
- */
-router.put("/:id", auth, async (req, res) => {
+// Update a blog
+const updateBlog = async (req, res) => {
   try {
     const blog = await Blog.findById(req.params.id);
 
@@ -484,36 +305,10 @@ router.put("/:id", auth, async (req, res) => {
     console.error("Update blog error:", error);
     res.status(500).json({ success: false, message: "Server error while updating blog" });
   }
-});
+};
 
-// @route   DELETE /v1/blogs/:id
-// @desc    Delete blog
-// @access  Private (author only)
-/**
- * @swagger
- * /blogs/{id}:
- *   delete:
- *     summary: Delete a blog
- *     description: Permanently delete a blog post. Only the original author can delete.
- *     tags: [Blogs]
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Blog ObjectId
- *     responses:
- *       200:
- *         description: Blog deleted
- *       403:
- *         description: Not authorized
- *       404:
- *         description: Blog not found
- */
-router.delete("/:id", auth, async (req, res) => {
+// Delete a blog
+const deleteBlog = async (req, res) => {
   try {
     const blog = await Blog.findById(req.params.id);
 
@@ -522,11 +317,8 @@ router.delete("/:id", auth, async (req, res) => {
       return res.status(403).json({ success: false, message: "Not authorized to delete this blog" });
     }
 
-
-    
     await blog.deleteOne();
 
-    const User = require("../models/User");
     await User.findByIdAndUpdate(req.userId, {
       $pull: { blogs: blog._id },
       $inc: { "account_info.total_posts": -1 },
@@ -537,32 +329,10 @@ router.delete("/:id", auth, async (req, res) => {
     console.error("Delete blog error:", error);
     res.status(500).json({ success: false, message: "Server error while deleting blog" });
   }
-});
+};
 
-// @route   POST /v1/blogs/seed
-// @desc    Seed mock blog articles into DB (requires categories to be seeded first)
-// @access  Public (run once)
-/**
- * @swagger
- * /blogs/seed:
- *   post:
- *     summary: Seed mock blog articles
- *     description: |
- *       Insert sample blog articles into the database.
- *       Requires at least one user and seeded categories.
- *       Skips if blogs already exist.
- *     tags: [Blogs]
- *     security:
- *       - BearerAuth: []
- *     responses:
- *       201:
- *         description: Blogs seeded
- *       200:
- *         description: Blogs already exist
- *       400:
- *         description: No users found
- */
-router.post("/seed", auth, async (req, res) => {
+// Seed mock blogs
+const seedBlogs = async (req, res) => {
   try {
     const existing = await Blog.countDocuments();
     if (existing > 0) {
@@ -572,8 +342,6 @@ router.post("/seed", auth, async (req, res) => {
       });
     }
 
-    // Find a system user (first user in DB) to be author
-    const User = require("../models/User");
     const systemUser = await User.findOne();
     if (!systemUser) {
       return res.status(400).json({
@@ -582,7 +350,6 @@ router.post("/seed", auth, async (req, res) => {
       });
     }
 
-    // Build category lookup map
     const categories = await Category.find();
     const catMap = {};
     categories.forEach((c) => (catMap[c.name_en] = c._id));
@@ -603,6 +370,77 @@ router.post("/seed", auth, async (req, res) => {
     console.error("Seed blogs error:", error);
     res.status(500).json({ success: false, message: "Server error while seeding blogs" });
   }
-});
+};
 
-module.exports = router;
+// Toggle like / unlike on a blog post
+const toggleLikeBlog = async (req, res) => {
+  try {
+    const blogId = req.params.id;
+    const userId = req.userId;
+
+    const blog = await Blog.findById(blogId);
+    if (!blog) {
+      return res.status(404).json({ success: false, message: "Blog not found" });
+    }
+
+    const existingLike = await Notification.findOne({
+      type: "like",
+      blog: blogId,
+      user: userId,
+    });
+
+    if (existingLike) {
+      // Unlike
+      await Notification.deleteOne({ _id: existingLike._id });
+      blog.activity.total_likes = Math.max(0, blog.activity.total_likes - 1);
+      await blog.save();
+      return res.status(200).json({ success: true, liked: false, total_likes: blog.activity.total_likes });
+    } else {
+      // Like
+      const likeNotif = new Notification({
+        type: "like",
+        blog: blogId,
+        user: userId,
+        notification_for: blog.author,
+      });
+      await likeNotif.save();
+      blog.activity.total_likes += 1;
+      await blog.save();
+      return res.status(200).json({ success: true, liked: true, total_likes: blog.activity.total_likes });
+    }
+  } catch (error) {
+    console.error("Toggle like error:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+// Check if current user liked this blog
+const checkLikedBlog = async (req, res) => {
+  try {
+    const blogId = req.params.id;
+    const userId = req.userId;
+
+    const existingLike = await Notification.findOne({
+      type: "like",
+      blog: blogId,
+      user: userId,
+    });
+
+    res.status(200).json({ success: true, liked: !!existingLike });
+  } catch (error) {
+    console.error("Check liked error:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+module.exports = {
+  getBlogs,
+  getMyBlogs,
+  getBlogById,
+  createBlog,
+  updateBlog,
+  deleteBlog,
+  seedBlogs,
+  toggleLike: toggleLikeBlog,
+  checkLiked: checkLikedBlog,
+};
