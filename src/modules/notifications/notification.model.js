@@ -30,6 +30,10 @@ const notificationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Comment",
     },
+    replied_on_comment: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Comment",
+    },
     seen: {
       type: Boolean,
       default: false,

@@ -1,5 +1,6 @@
 const Comment = require("./comment.model");
 const Blog = require("../blogs/blog.model");
+const Notification = require("../notifications/notification.model");
 
 const COMMENT_POPULATE = {
   path: "commented_by",
@@ -69,8 +70,14 @@ const addComment = async (req, res) => {
       isReply,
     });
 
+    let notifiedUserId = blog.author; // default: notify the blog author
+
     if (isReply) {
-      await Comment.findByIdAndUpdate(replyingTo, { $push: { children: newComment._id } });
+      const parentComment = await Comment.findByIdAndUpdate(replyingTo, { $push: { children: newComment._id } });
+      // For replies, notify the author of the parent comment instead
+      if (parentComment) {
+        notifiedUserId = parentComment.commented_by;
+      }
     }
 
     await Blog.findByIdAndUpdate(blog._id, {
@@ -79,6 +86,21 @@ const addComment = async (req, res) => {
         ...(isReply ? {} : { "activity.total_parent_comments": 1 }),
       },
     });
+
+    // Create notification (comment or reply) — skip if user is notifying themselves
+    if (req.userId !== notifiedUserId?.toString()) {
+      const notifObj = {
+        type: isReply ? "reply" : "comment",
+        blog: blog._id,
+        notification_for: notifiedUserId,
+        user: req.userId,
+        comment: newComment._id,
+      };
+      if (isReply) {
+        notifObj.replied_on_comment = replyingTo;
+      }
+      await Notification.create(notifObj);
+    }
 
     const populated = await newComment.populate(COMMENT_POPULATE);
     res.status(201).json({ success: true, data: populated });
@@ -143,8 +165,15 @@ const deleteComment = async (req, res) => {
 
     if (!comment.isReply && comment.children?.length > 0) {
       await Comment.deleteMany({ _id: { $in: comment.children } });
+      // Clean up notifications for all child replies
+      await Notification.deleteMany({ comment: { $in: comment.children } });
     }
     await comment.deleteOne();
+
+    // Clean up notifications referencing this comment
+    await Notification.deleteMany({ comment: comment._id });
+    // Unset reply reference on any notification that pointed to this as a reply
+    await Notification.updateMany({ reply: comment._id }, { $unset: { reply: 1 } });
 
     res.json({ success: true, message: "Comment deleted" });
   } catch (err) {

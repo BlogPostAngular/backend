@@ -26,6 +26,7 @@ const getNotifications = async (req, res) => {
       .populate("blog", "title blog_id")
       .populate("comment", "comment")
       .populate("reply", "comment")
+      .populate("replied_on_comment", "comment")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)

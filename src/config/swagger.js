@@ -7,7 +7,7 @@ const options = {
       title: "Blog Post API",
       version: "1.0.0",
       description:
-        "REST API for the Blog Post application — authentication, blogs, categories, users, and image uploads.",
+        "REST API for the Blog Post application — authentication, blogs, categories, users, image uploads, comments, and notifications.",
       contact: {
         name: "API Support",
       },
@@ -347,10 +347,107 @@ const options = {
             },
           },
         },
+
+        // ── Comment ──
+        Comment: {
+          type: "object",
+          properties: {
+            _id: { type: "string" },
+            blog_id: { type: "string", description: "Blog ObjectId" },
+            blog_author: { type: "string", description: "Blog author ObjectId" },
+            comment: { type: "string", example: "Great post!" },
+            commented_by: { $ref: "#/components/schemas/User" },
+            parent: { type: "string", nullable: true, description: "Parent comment ObjectId (null for top-level)" },
+            isReply: { type: "boolean", default: false },
+            children: {
+              type: "array",
+              items: { type: "string" },
+              description: "Array of reply comment ObjectIds",
+            },
+            commentedAt: { type: "string", format: "date-time" },
+          },
+        },
+        AddCommentRequest: {
+          type: "object",
+          required: ["comment"],
+          properties: {
+            comment: { type: "string", example: "Great post!" },
+            replyingTo: {
+              type: "string",
+              description: "Parent comment ObjectId — omit for top-level comments",
+              nullable: true,
+            },
+          },
+        },
+        CommentListResponse: {
+          type: "object",
+          properties: {
+            success: { type: "boolean", example: true },
+            data: {
+              type: "object",
+              properties: {
+                comments: { type: "array", items: { $ref: "#/components/schemas/Comment" } },
+                total: { type: "integer" },
+                hasMore: { type: "boolean" },
+              },
+            },
+          },
+        },
+
+        // ── Notification ──
+        Notification: {
+          type: "object",
+          properties: {
+            _id: { type: "string" },
+            type: { type: "string", enum: ["like", "comment", "reply"] },
+            blog: {
+              type: "object",
+              properties: {
+                title: { type: "string" },
+                blog_id: { type: "string" },
+              },
+            },
+            user: { $ref: "#/components/schemas/User" },
+            comment: {
+              type: "object",
+              nullable: true,
+              properties: { comment: { type: "string" } },
+            },
+            reply: {
+              type: "object",
+              nullable: true,
+              properties: { comment: { type: "string" } },
+            },
+            replied_on_comment: {
+              type: "object",
+              nullable: true,
+              description: "The original comment that was replied to",
+              properties: { comment: { type: "string" } },
+            },
+            seen: { type: "boolean", default: false },
+            createdAt: { type: "string", format: "date-time" },
+          },
+        },
+        NotificationListResponse: {
+          type: "object",
+          properties: {
+            success: { type: "boolean", example: true },
+            data: {
+              type: "object",
+              properties: {
+                notifications: { type: "array", items: { $ref: "#/components/schemas/Notification" } },
+                total: { type: "integer" },
+                currentPage: { type: "integer" },
+                totalPages: { type: "integer" },
+                hasMore: { type: "boolean" },
+              },
+            },
+          },
+        },
       },
     },
   },
-  apis: ["./routes/*.js", "./src/modules/**/*.routes.js", "./src/modules/**/*.controller.js"],
+  apis: ["./routes/*.js", "./src/modules/**/*.routes.js", "./src/modules/**/*.controller.js", "./src/config/swagger-paths.js"],
 };
 
 const swaggerSpec = swaggerJsdoc(options);
